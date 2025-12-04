@@ -40,6 +40,8 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   std::scoped_lock<std::mutex> lock(latch_);
+
+  auto newpage=AllocatePage();
   frame_id_t replaceframe;
   if(!free_list_.empty()){
     replaceframe=free_list_.front();
@@ -48,33 +50,68 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     if(!replacer_->Evict(&replaceframe)){
       return nullptr;
     }
-
-    if(pages_[replaceframe].IsDirty()){
-      auto promise1=disk_scheduler_->CreatePromise();
-      auto future=promise1.get_future();
-      disk_scheduler_->Schedule({true,pages_[replaceframe].GetData(),pages_[replaceframe].page_id_,std::move(promise1)});
-      future.get();
-    }
-
-    page_table_.erase(pages_[replaceframe].page_id_);
   }
 
-  auto page=AllocatePage();
+  if(pages_[replaceframe].IsDirty()){
+    auto promise=disk_scheduler_->CreatePromise();
+    auto future=promise.get_future();
+    disk_scheduler_->Schedule({true,pages_[replaceframe].GetData(),pages_[replaceframe].page_id_,std::move(promise)});
+    future.get();
+  }
+
+  page_table_.erase(pages_[replaceframe].page_id_);
+  pages_[replaceframe].page_id_=newpage;
+  page_table_.insert({newpage,replaceframe});
+  *page_id=newpage;
   
 }
 
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
-  return nullptr;
+  std::scoped_lock<std::mutex> lock(latch_);
+
+  frame_id_t replaceframe;
+  auto it=page_table_.find(page_id);
+  if(it!=page_table_.end()){
+    replaceframe=it->second;
+    pages_[replaceframe].pin_count_++;
+    replacer_->RecordAccess(replaceframe);
+    replacer_->SetEvictable(replaceframe,false);
+    return &pages_[replaceframe];
+  }
+  
+  if(!free_list_.empty()){
+    replaceframe=std::move(free_list_.front());
+    free_list_.pop_front();
+  }else{
+    if(!replacer_->Evict(&replaceframe)){
+      return nullptr;
+    }
+  }
+
+  if(pages_[replaceframe].IsDirty()){
+    auto promise=disk_scheduler_->CreatePromise();
+    auto future=promise.get_future();
+    disk_scheduler_->Schedule({true,pages_[replaceframe].GetData(),pages_[replaceframe].GetPageId(),std::move(promise)});
+    future.get();
+  }
+
+  pages_[replaceframe].page_id_=page_id;
+  pages_[replaceframe].pin_count_++;
+  replacer_->RecordAccess(replaceframe);
+  replacer_->SetEvictable(replaceframe,false);
+  page_table_.erase(page_id);
+  page_table_.insert({page_id,replaceframe});
+  return &pages_[replaceframe];
 }
 
 auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unused]] AccessType access_type) -> bool {
   std::scoped_lock<std::mutex> lock(latch_);
 
   auto it=page_table_.find(page_id);
-  if(it==page_table_.end()||pages_[it->second].pin_count_<=0) return false;
+  if(it==page_table_.end()||pages_[it->second].GetPinCount()==0) return false;
 
   pages_[it->second].pin_count_--;
-  if(pages_[page_id].pin_count_==0){
+  if(pages_[page_id].GetPinCount()==0){
     replacer_->SetEvictable(it->second,true);
   }
 
@@ -86,31 +123,28 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
 
 auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   std::scoped_lock<std::mutex> lock(latch_);
-  BUSTUB_ASSERT(page_id!=INVALID_PAGE_ID,"page_id is invalid");
   
   auto it=page_table_.find(page_id);
   if(it==page_table_.end()) return false;
   
-  auto target=it->second;
   auto promise=disk_scheduler_->CreatePromise();
   auto future=promise.get_future();
-  disk_scheduler_->Schedule({true,pages_[target].data_,pages_[target].page_id_,std::move(promise)});
+  disk_scheduler_->Schedule({true,pages_[it->second].GetData(),pages_[it->second].GetPageId(),std::move(promise)});
   future.get();
-  pages_[target].is_dirty_=false;
+
+  pages_[it->second].is_dirty_=false;
+  return true;
 }
 
 void BufferPoolManager::FlushAllPages() {
   std::scoped_lock<std::mutex> lock(latch_);  
   
   for(auto &it:page_table_){
-    auto page_id=it.first;
-    BUSTUB_ASSERT(page_id!=INVALID_PAGE_ID,"page_id is invalid");
-    auto target=it.second;
     auto promise=disk_scheduler_->CreatePromise();
     auto future=promise.get_future();
-    disk_scheduler_->Schedule({true,pages_[target].data_,pages_[target].page_id_,std::move(promise)});
+    disk_scheduler_->Schedule({true,pages_[it.second].GetData(),pages_[it.second].GetPageId(),std::move(promise)});
     future.get();
-    pages_[target].is_dirty_=false;
+    pages_[it.second].is_dirty_=false;
   }
 }
 
@@ -120,13 +154,13 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   if(it==page_table_.end()) return false;
 
   auto target=it->second;
-  if(pages_[target].pin_count_>0) return false;
+  if(pages_[target].GetPinCount()>0) return false;
   
   page_table_.erase(page_id);
   replacer_->Remove(target);
-  free_list_.push_back(target);
+  free_list_.emplace_back(target);
+  
   pages_[target].ResetMemory();
-
   pages_[target].page_id_=INVALID_PAGE_ID;
   pages_[target].pin_count_=0;
   pages_[target].is_dirty_=false;
