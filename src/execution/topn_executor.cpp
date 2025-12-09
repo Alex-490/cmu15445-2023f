@@ -7,6 +7,7 @@ TopNExecutor::TopNExecutor(ExecutorContext *exec_ctx, const TopNPlanNode *plan,
     : AbstractExecutor(exec_ctx) ,plan_(plan),child_executor_(std::move(child_executor)){}
 
 void TopNExecutor::Init() {
+    if(!tuples_.empty())    return;
     tuples_.clear();
     child_executor_->Init();
     CompareTuple comp(&plan_->GetOrderBy(),&child_executor_->GetOutputSchema());
@@ -41,7 +42,6 @@ void TopNExecutor::Init() {
     }
 
     iter_=tuples_.rbegin();
-    //throw NotImplementedException("TopNExecutor is not implemented");
 }
 
 auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {
