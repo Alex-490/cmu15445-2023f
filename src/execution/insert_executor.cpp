@@ -26,7 +26,7 @@ void InsertExecutor::Init() {
     index_infos_=exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 }
 
-auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if(has_done_) return false;
 
     int count=0;
@@ -35,13 +35,13 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
     while(child_executor_->Next(&child_tuple,&child_rid)){
         TupleMeta meta_tmp{0,false};
-        auto rid_tmp=table_info_->table_->InsertTuple(meta_tmp,child_tuple);
+        auto new_rid=table_info_->table_->InsertTuple(meta_tmp,child_tuple);
 
-        BUSTUB_ASSERT(rid_tmp.has_value(),"Insert failed");
+        BUSTUB_ASSERT(new_rid.has_value(),"Insert failed");
         for(auto *index_info:index_infos_){
         index_info->index_->InsertEntry(
             child_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
-            rid_tmp.value(),
+            new_rid.value(),
             exec_ctx_->GetTransaction());
         }
         ++count;

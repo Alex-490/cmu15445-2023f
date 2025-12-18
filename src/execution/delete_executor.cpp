@@ -27,7 +27,7 @@ void DeleteExecutor::Init() {
     //throw NotImplementedException("DeleteExecutor is not implemented");
 }
 
-auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if(has_done_)    return false;
 
     int count=0;
