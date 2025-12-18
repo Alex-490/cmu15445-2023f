@@ -27,36 +27,32 @@ void InsertExecutor::Init() {
 }
 
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-    if(is_finished) return false;
-    is_finished=true;
+    if(has_done_) return false;
 
+    int count=0;
     Tuple child_tuple;
     RID child_rid;
 
-    auto status=child_executor_->Next(&child_tuple,&child_rid);
-    while(status){
-        TupleMeta meta_tmp;
-        meta_tmp.is_deleted_=false;
-        meta_tmp.ts_=0;
+    while(child_executor_->Next(&child_tuple,&child_rid)){
+        TupleMeta meta_tmp{0,false};
         auto rid_tmp=table_info_->table_->InsertTuple(meta_tmp,child_tuple);
 
-        if(rid_tmp.has_value()){
-            for(auto *index_info:index_infos_){
-            index_info->index_->InsertEntry(
-                child_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
-                rid_tmp.value(),
-                exec_ctx_->GetTransaction());
-            }
-
-            status=child_executor_->Next(&child_tuple,&child_rid);
-            ++count_;
+        BUSTUB_ASSERT(rid_tmp.has_value(),"Insert failed");
+        for(auto *index_info:index_infos_){
+        index_info->index_->InsertEntry(
+            child_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
+            rid_tmp.value(),
+            exec_ctx_->GetTransaction());
         }
+        ++count;
     }
     
     std::vector<Value> ret;
-    ret.emplace_back(INTEGER,count_);
+    ret.emplace_back(INTEGER,count);
     *tuple=Tuple(ret,&GetOutputSchema());
+    *rid=RID();
 
+    has_done_=true;
     return true;
 }
 
