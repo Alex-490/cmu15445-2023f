@@ -53,13 +53,13 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     auto new_rid=table_info_->table_->InsertTuple(meta,new_tuple);
 
     for(auto* index_info:index_infos_){
-      index_info->index_->InsertEntry(
-        new_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
-        new_rid.value(),exec_ctx_->GetTransaction());
-      
       index_info->index_->DeleteEntry(
         old_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
         old_rid,exec_ctx_->GetTransaction());
+        
+      index_info->index_->InsertEntry(
+        new_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
+        new_rid.value(),exec_ctx_->GetTransaction());
     }
 
 
