@@ -31,18 +31,18 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     if(has_done_)    return false;
 
     int count=0;
-    Tuple tuple_tmp;
-    RID rid_tmp;
+    Tuple child_tuple;
+    RID child_rid;
     
-    while(child_executor_->Next(&tuple_tmp,&rid_tmp)){
-        auto meta=table_info_->table_->GetTupleMeta(rid_tmp);
+    while(child_executor_->Next(&child_tuple,&child_rid)){
+        auto meta=table_info_->table_->GetTupleMeta(child_rid);
         meta.is_deleted_=true;
-        table_info_->table_->UpdateTupleMeta(meta,rid_tmp);
+        table_info_->table_->UpdateTupleMeta(meta,child_rid);
 
         for(auto *index_info:index_infos_){
             index_info->index_->DeleteEntry(
-                tuple_tmp.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
-                rid_tmp,exec_ctx_->GetTransaction());
+                child_tuple.KeyFromTuple(table_info_->schema_,index_info->key_schema_,index_info->index_->GetKeyAttrs()),
+                child_rid,exec_ctx_->GetTransaction());
         }
         count++;
     }
