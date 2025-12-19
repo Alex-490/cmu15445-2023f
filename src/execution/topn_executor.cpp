@@ -14,13 +14,11 @@ void TopNExecutor::Init() {
 
     std::priority_queue<std::pair<Tuple,RID>,std::vector<std::pair<Tuple,RID>>,CompareTuple> queue(comp);
 
-    Tuple tuple_tmp;
-    RID rid_tmp;
+    Tuple tuple_child;
+    RID rid_child;
 
-    auto status=child_executor_->Next(&tuple_tmp,&rid_tmp);
-    std::pair<Tuple,RID> pair_tmp={tuple_tmp,rid_tmp};
-
-    while(status){
+    while(child_executor_->Next(&tuple_child,&rid_child)){
+        std::pair<Tuple,RID> pair_tmp={tuple_child,rid_child};
         if(queue.size()<plan_->GetN()){
             queue.push(pair_tmp);
         }else{
@@ -30,22 +28,18 @@ void TopNExecutor::Init() {
                 queue.push(pair_tmp);
             }
         }
-        status=child_executor_->Next(&tuple_tmp,&rid_tmp);
-        pair_tmp={tuple_tmp,rid_tmp};
     }
 
-    unsigned count=0;
-    while(queue.size()&&count<plan_->GetN()){
+    while(!queue.empty()){
         tuples_.emplace_back(queue.top());
         queue.pop();
-        count++;
     }
 
-    iter_=tuples_.rbegin();
+    iter_=tuples_.begin();
 }
 
 auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-    if(iter_==tuples_.rend())   return false;
+    if(iter_==tuples_.end())   return false;
     
     *tuple=iter_->first;
     *rid=iter_->second;

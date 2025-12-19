@@ -66,6 +66,6 @@ class TopNExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_executor_;
 
   std::vector<std::pair<Tuple, RID>> tuples_;
-  std::vector<std::pair<Tuple, RID>>::reverse_iterator iter_;
+  std::vector<std::pair<Tuple, RID>>::iterator iter_;
 };
 }  // namespace bustub
