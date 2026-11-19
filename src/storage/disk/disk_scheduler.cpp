@@ -34,22 +34,41 @@ DiskScheduler::~DiskScheduler() {
   }
 }
 
+//n个线程把diskrequest放入requestqueue里面 
+//这个应该是放进去，因为传入了一个参数
 void DiskScheduler::Schedule(DiskRequest r) {
-  request_queue_.Put(std::move(r));
+  //怎么给r套上std::optional?
+  request_queue_.Put(std::optional<DiskRequest>(std::move(r)));
 }
 
+/*
+它需要不断重复以下工作：
+1. 从队列中取出一个请求。
+2. 判断这是读请求还是写请求。
+3. 如果是读，就调用 DiskManager 的读接口。
+4. 如果是写，就调用 DiskManager 的写接口。
+5. 操作完成后，通过 callback_ 通知请求发起者。
+6. 继续处理下一个请求。
+*/
 void DiskScheduler::StartWorkerThread() {
-  std::optional<DiskRequest> request;
-  while((request=request_queue_.Get())){
-    if(request){
-      if(request->is_write_){
-        disk_manager_->WritePage(request->page_id_,request->data_);
-        request->callback_.set_value(true);
-      }else{
-        disk_manager_->ReadPage(request->page_id_,request->data_);
-        request->callback_.set_value(true);
-      }
+  while(1){
+    //因为get本身就设置了阻塞因此这里不需要使用阻塞
+    std::optional<DiskRequest> r=request_queue_.Get();
+    //终止信号
+    if(!r.has_value()){
+      //析构是往队列里面放nullopt，为的是等队列里面剩余任务完成
+      //DiskScheduler::~DiskScheduler();
+      return;//还需要return么？
     }
+
+    //写
+    if(r.value().is_write_){
+      disk_manager_->WritePage(r.value().page_id_,r.value().data_);
+    }else{
+      disk_manager_->ReadPage(r.value().page_id_,r.value().data_);
+    }
+
+    r.value().callback_.set_value(true);//这里设置为true，触发通知，共享状态就绪，future解除阻塞
   }
 }
 
