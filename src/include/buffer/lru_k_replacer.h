@@ -26,18 +26,48 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
- private:
+public:
+  LRUKNode()=default;
+
+  LRUKNode(size_t k,size_t time):k_(k){
+    history_.push_back(time);
+  }
+
+  //插入一个最新记录
+  void access(const size_t& time){
+    history_.push_back(time);
+    if(history_.size()>k_){
+      history_.pop_front();
+    }
+  }
+
+  bool isEvictable()const{
+    return is_evictable_;
+  }
+
+  void setEvictable(bool set){
+    is_evictable_=set;
+  }
+
+  size_t size()const{
+    return history_.size();
+  }
+
+  //最早访问时间
+  //如果size_==k那便是倒数第k次被访问的时间
+  size_t earliest()const{
+    return history_.front();
+  }
+ 
+private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  public:
-    std::list<size_t> history_;
-    size_t k_;
-    frame_id_t fid_;
-    bool is_evictable_{false};
-
-  auto GetBackKStamp(){return history_.front();}
-  auto GetLatestStamp(){return history_.back();}
+  std::list<size_t> history_;//一个访问历史时间集合
+  size_t k_;//lruk的k？
+  frame_id_t fid_;//id
+  bool is_evictable_{false};//能否驱逐
+  //不需要添加mutex，因为replacer已经把nodes全部用mutex管理起来了
 };
 
 /**
@@ -154,11 +184,12 @@ class LRUKReplacer {
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
-  std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  size_t current_timestamp_{0};
-  size_t curr_size_{0};
-  size_t replacer_size_;
-  size_t k_;
+  //key居然不是指针而是
+  std::unordered_map<frame_id_t, LRUKNode> node_store_;//通过帧id快速查这个帧的访问记录
+  size_t current_timestamp_{0};//全局单调递增的时间戳计数器
+  size_t curr_size_{0};//当前可以被驱逐的帧数量
+  size_t replacer_size_;//replacer容量上限
+  size_t k_;//lruk的k值
   std::mutex latch_;
 };
 
