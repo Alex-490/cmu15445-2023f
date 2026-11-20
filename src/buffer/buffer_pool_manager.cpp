@@ -313,20 +313,28 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
 
 auto BufferPoolManager::AllocatePage() -> page_id_t { return next_page_id_++; }
 
+//这个有保护作用么？难道为了升级
 auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard {
-  
+  Page* page=FetchPage(page_id);
+  return BasicPageGuard(this,page);
 }
 
 auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
-  
+  Page* page=FetchPage(page_id);
+  if(page!=nullptr) page->RLatch();
+  return ReadPageGuard(this,page);//在ReadPageGuard的Drop()里面解锁
 }
 
 auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
-  
+  Page* page=FetchPage(page_id);
+  if(page!=nullptr) page->WLatch();
+  return WritePageGuard(this,page);//在WritePageGuard的Drop()里面解锁
 }
 
+//这个有保护作用么？难道为了升级
 auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard {
-  
+  Page* page=NewPage(page_id);
+  return BasicPageGuard(this,page);
 }
 
 }  // namespace bustub

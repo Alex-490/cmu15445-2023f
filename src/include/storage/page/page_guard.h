@@ -118,6 +118,9 @@ class ReadPageGuard {
   ReadPageGuard(const ReadPageGuard &) = delete;
   auto operator=(const ReadPageGuard &) -> ReadPageGuard & = delete;
 
+  ReadPageGuard(BasicPageGuard&& guard)noexcept
+    :guard_(std::move(guard)){}
+  
   /** TODO(P2): Add implementation
    *
    * @brief Move constructor for ReadPageGuard
@@ -177,6 +180,9 @@ class WritePageGuard {
   WritePageGuard(BufferPoolManager *bpm, Page *page) : guard_(bpm, page) {}
   WritePageGuard(const WritePageGuard &) = delete;
   auto operator=(const WritePageGuard &) -> WritePageGuard & = delete;
+
+  WritePageGuard(BasicPageGuard&& guard)noexcept
+    :guard_(std::move(guard)){}
 
   /** TODO(P2): Add implementation
    *
