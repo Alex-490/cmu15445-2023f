@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
+#include <exception>
 
 #include "buffer/lru_k_replacer.h"
 #include "common/config.h"
@@ -84,6 +85,10 @@ class BufferPoolManager {
    * @return BasicPageGuard holding a new page
    */
   auto NewPageGuarded(page_id_t *page_id) -> BasicPageGuard;
+
+  auto NewReadGuarded(page_id_t *page_id) -> ReadPageGuard;
+
+  auto NewWriteGuarded(page_id_t *page_id) -> WritePageGuard;
 
   /**
    * TODO(P1): Add implementation
@@ -179,17 +184,17 @@ class BufferPoolManager {
   std::atomic<page_id_t> next_page_id_ = 0;
 
   /** Array of buffer pool pages. */
-  Page *pages_;
+  Page *pages_; //帧数组，frame_id_t其实就是它的下标
   /** Pointer to the disk sheduler. */
-  std::unique_ptr<DiskScheduler> disk_scheduler_ __attribute__((__unused__));
+  std::unique_ptr<DiskScheduler> disk_scheduler_ __attribute__((__unused__)); //read和write请求队列
   /** Pointer to the log manager. Please ignore this for P1. */
   LogManager *log_manager_ __attribute__((__unused__));
   /** Page table for keeping track of buffer pool pages. */
-  std::unordered_map<page_id_t, frame_id_t> page_table_;
-  /** Replacer to find unpinned pages for replacement. */
-  std::unique_ptr<LRUKReplacer> replacer_;
+  std::unordered_map<page_id_t, frame_id_t> page_table_; //记录内存中的page们的id和实际所处帧数组位置索引的map
+  /** Replacer to find unpinned pages for replacement. */ 
+  std::unique_ptr<LRUKReplacer> replacer_;//管理在内存（帧数组）中的page们的访问记录
   /** List of free frames that don't have any pages on them. */
-  std::list<frame_id_t> free_list_;
+  std::list<frame_id_t> free_list_; //帧数组中的空闲索引组成的list
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   std::mutex latch_;
 
@@ -208,5 +213,49 @@ class BufferPoolManager {
   }
 
   // TODO(student): You may add additional private members and helper functions
+  //帧重置
+  void FrameReset(Page* page){
+    page->is_dirty_=false;
+    page->ResetMemory();
+    page->pin_count_=0;
+    page->page_id_=INVALID_PAGE_ID;
+  }
+
+  bool flushPageUnsafe(page_id_t page_id);
+
+  //清理旧帧相关信息
+  void del(Page* page);
+
+  //刷盘失败后的处理
+  void afterFlushFail(frame_id_t f){
+    FrameReset(&pages_[f]);
+    free_list_.push_front(f);
+  }
+
+  //从evict中获取淘汰帧的安全处理方式
+  bool safeFuncOfFrameFromEvict(frame_id_t* frame){
+    frame_id_t f=-1;
+    if(!replacer_->Evict(&f)){
+      return false;
+    }
+
+    //此时f帧上的page的pincount=0
+    
+    Page* page=&pages_[f];
+    
+    if(page->is_dirty_){
+      //刷盘失败必须保存旧帧的数据
+      //evictable的帧，is_dirty值是不知道的
+      if(!flushPageUnsafe(page->page_id_)){
+        replacer_->RecordAccess(f);
+        replacer_->SetEvictable(f,true);
+
+        return false;
+      }
+    }
+
+    *frame=f;
+    return true;
+  }
 };
 }  // namespace bustub
