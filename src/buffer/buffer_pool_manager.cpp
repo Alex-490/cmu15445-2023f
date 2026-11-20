@@ -103,11 +103,14 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   //有就先处理再返回
   if(it!=page_table_.end()){
     Page* page=&pages_[it->second];
+    //如果之前是可淘汰（驱逐）状态（evictable），那么要先设置为！evictable
     if(page->pin_count_==0){
       replacer_->SetEvictable(it->second,false);
     }
-    replacer_->RecordAccess(it->second);
-    page->pin_count_++;
+    //添加lruknode的访问记录
+    replacer_->RecordAccess(it->second);//lruknode是为了方便使用lruk算法淘汰某个已经evictable帧
+    //页的引用计数
+    page->pin_count_++;//页的引用计数是为了确定某页的evictable状态
     return page;
   }
 
@@ -214,6 +217,9 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
 }
 
 //不加锁的刷盘
+//刷盘后只是把is_dirty的状态改成false了；
+//淘汰帧前必刷盘
+//刷盘和evictable无关，任何时候都可以刷盘
 bool BufferPoolManager::flushPageUnsafe(page_id_t page_id){
   auto it=page_table_.find(page_id);
   if(it==page_table_.end()){

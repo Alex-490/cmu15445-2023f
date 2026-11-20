@@ -254,6 +254,7 @@ class BufferPoolManager {
       }
     }
 
+    page_table_.erase(page->page_id_);
     *frame=f;
     return true;
   }
