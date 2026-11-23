@@ -193,6 +193,22 @@ class ExtendibleHTableDirectoryPage {
 
  private:
   uint32_t max_depth_;
+  /*
+  具体有三个用途：
+1. 分裂 Bucket：知道需要检查 Hash 的第几个低位，以及应该修改哪些目录项。
+2. 合并 Bucket：判断两个 Bucket 是否可以合并，也就是它们是否具有相同的 Local Depth。
+3. 缩小 Directory：判断所有 Bucket 是否都不再需要当前的最高索引位。
+最后再强调一句：
+
+Local Depth 在逻辑上属于 Bucket，但在 BusTub 的物理实现中，它存放在 Directory Page 的 local_depths_ 数组里。
+  */
+ /*
+ key和hashkey是一一对应的，hashkey和bucket_pages_ids_的索引是一一对应的
+ 假设globaldepth是3，那么bpi_的长度为8，8项的内容都指向同一个bucket页。也就是说只有一个桶。
+ 一开始localdepth都为0。开始放入直到桶满了，于是开始分裂。以0结尾的索引和以1结尾的索引分开成2个桶，localdepth++。
+ 如果两个桶的某一个又满了，比如000，010，100，110，也就是0，2，4，6.这4个会分成以00和10结尾的两个桶，这时候总共是3个桶。
+ 这4个的localdepth又++.
+ */
   uint32_t global_depth_;
   uint8_t local_depths_[HTABLE_DIRECTORY_ARRAY_SIZE];
   page_id_t bucket_page_ids_[HTABLE_DIRECTORY_ARRAY_SIZE];

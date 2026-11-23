@@ -123,6 +123,20 @@ class DiskExtendibleHashTable {
                       ExtendibleHTableBucketPage<K, V, KC> *new_bucket, uint32_t new_bucket_idx,
                       uint32_t local_depth_mask);
 
+//这两个不可行，因为guard会在函数结束后析构，而且还分read和write不同的guard                    
+//通过key找到directorypage
+const ExtendibleHTableDirectoryPage* getDirectory(const K& key);
+
+//通过key找到bucketpage
+const ExtendibleHTableBucketPage<K,V,KC>* getBucket(const K& key);
+
+
+//某个桶因为某次Insert()桶满了要递归分裂
+bool split(ExtendibleHTableDirectoryPage* dirctory,ExtendibleHTableBucketPage<K,V,KC>* bucket,uint32_t bIndex);
+
+//某个桶因为某次Remove()桶空了要递归合并
+bool mergeR(ExtendibleHTableDirectoryPage* dirctory,uint32_t bIndex);
+
   // member variables
   std::string index_name_;
   BufferPoolManager *bpm_;

@@ -20,14 +20,14 @@ namespace bustub {
 
 template <typename K, typename V, typename KC>
 void ExtendibleHTableBucketPage<K, V, KC>::Init(uint32_t max_size) {
-  size_=0;
   max_size_=max_size;
+  size_=0;
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Lookup(const K &key, V &value, const KC &cmp) const -> bool {
-  for(int i=0;i<size_;i++){
-    if(cmp(array_[i].first,key)==0){
+  for(uint32_t i=0;i<size_;i++){
+    if(cmp(key,array_[i].first)==0){
       value=array_[i].second;
       return true;
     }
@@ -38,52 +38,63 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Lookup(const K &key, V &value, const 
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, const KC &cmp) -> bool {
-  if(size_==max_size_)  return false;
-  
-  for(int i=0;i<size_;i++){
-    if(cmp(array_[i].first,key)==0)  return false;
+  for(uint32_t i=0;i<size_;i++){
+    if(cmp(key,array_[i].first)==0){
+      return false;
+    }
   }
 
-  array_[size_].first=key;
-  array_[size_].second=value;
-  size_++;
+  //别忘了这个
+  if(IsFull())  return false;
+
+  array_[size_++]=std::make_pair(key,value);
   return true;
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Remove(const K &key, const KC &cmp) -> bool {
-  for(int i=0;i<size_;i++){
-    if(cmp(array_[i].first,key)==0){
-      array_[i].first=array_[size_-1].first;
-      array_[i].second=array_[size_-1].second;
-      size_--;
+  for(uint32_t i=0;i<size_;i++){
+    if(cmp(key,array_[i].first)==0){
+      //K 和 V 可以是用户自定义类型。它们的赋值运算符不一定能安全处理自赋值。
+      //array_[i]=array_[--size_];
+      
+      //改成这样
+      --size_;
+      if(i!=size_)  array_[i]=array_[size_];
+
       return true;
     }
   }
 
+  //key不存在
   return false;
 }
 
 template <typename K, typename V, typename KC>
 void ExtendibleHTableBucketPage<K, V, KC>::RemoveAt(uint32_t bucket_idx) {
-  if(bucket_idx>=size_) return;
-  array_[bucket_idx].first=array_[size_-1].first;
-  array_[bucket_idx].second=array_[size_-1].second;
-  size_--;
+  BUSTUB_ASSERT(bucket_idx<size_,"invalid bucket_idx");
+  //K 和 V 可以是用户自定义类型。它们的赋值运算符不一定能安全处理自赋值。
+  //array_[bucket_idx]=array_[--size_];
+
+  --size_;
+  if(bucket_idx!=size_) array_[bucket_idx]=array_[size_];
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::KeyAt(uint32_t bucket_idx) const -> K {
+  BUSTUB_ASSERT(bucket_idx<size_,"invalid bucket_idx");
   return array_[bucket_idx].first;
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::ValueAt(uint32_t bucket_idx) const -> V {
+  BUSTUB_ASSERT(bucket_idx<size_,"invalid bucket_idx");
   return array_[bucket_idx].second;
 }
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::EntryAt(uint32_t bucket_idx) const -> const std::pair<K, V> & {
+  BUSTUB_ASSERT(bucket_idx<size_,"invalid bucket_idx");
   return array_[bucket_idx];
 }
 
@@ -94,7 +105,8 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Size() const -> uint32_t {
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::IsFull() const -> bool {
-  return size_==max_size_;
+  //return size_==max_size_;
+  return size_>=max_size_;//更好的防御性
 }
 
 template <typename K, typename V, typename KC>

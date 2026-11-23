@@ -134,7 +134,9 @@ class ExtendibleHTableBucketPage {
  private:
   uint32_t size_;
   uint32_t max_size_;
-  MappingType array_[HTableBucketArraySize(sizeof(MappingType))];
+  MappingType array_[HTableBucketArraySize(sizeof(MappingType))];//pair数组
+  //上面三个一共占了一个Page（4096B）
+  //不需要mutex，因为有readpageguard和writepageguard
 };
 
 }  // namespace bustub
