@@ -35,6 +35,7 @@
 
 namespace bustub {
 
+//获取最近的提交时间戳作为当前事务的read时间戳
 auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * {
   std::unique_lock<std::shared_mutex> l(txn_map_mutex_);
   auto txn_id = next_txn_id_++;
@@ -44,18 +45,17 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
 
   // TODO(fall2023): set the timestamps here. Watermark updated below.
   txn_ref->read_ts_=last_commit_ts_.load();
-
-  running_txns_.AddTxn(txn_ref->read_ts_);
-  return txn_ref;
 }
 
-auto TransactionManager::VerifyTxn(Transaction *txn) -> bool { return true; }
+auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
+  
+}
 
 auto TransactionManager::Commit(Transaction *txn) -> bool {
   std::unique_lock<std::mutex> commit_lck(commit_mutex_);
 
   // TODO(fall2023): acquire commit ts!
-  auto commit_ts_tmp_=last_commit_ts_+1;
+  timestamp_t temp_commit_ts = last_commit_ts_.load() + 1;
 
   if (txn->state_ != TransactionState::RUNNING) {
     throw Exception("txn not in running state");
@@ -74,14 +74,10 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
 
   // TODO(fall2023): set commit timestamp + update last committed timestamp here.
-  txn->commit_ts_=commit_ts_tmp_;
-  last_commit_ts_=commit_ts_tmp_;
-
-  txn->state_ = TransactionState::COMMITTED;
-  running_txns_.UpdateCommitTs(txn->commit_ts_);
-  running_txns_.RemoveTxn(txn->read_ts_);
-
-  return true;
+  txn->commit_ts_=temp_commit_ts;
+  //先提交再更新最近一次提交时间戳
+  txn->state_=TransactionState::COMMITTED;
+  last_commit_ts_=temp_commit_ts;
 }
 
 void TransactionManager::Abort(Transaction *txn) {
@@ -90,12 +86,10 @@ void TransactionManager::Abort(Transaction *txn) {
   }
 
   // TODO(fall2023): Implement the abort logic!
-
-  std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
-  txn->state_ = TransactionState::ABORTED;
-  running_txns_.RemoveTxn(txn->read_ts_);
 }
 
-void TransactionManager::GarbageCollection() { UNIMPLEMENTED("not implemented"); }
+void TransactionManager::GarbageCollection() { 
+  
+}
 
 }  // namespace bustub
