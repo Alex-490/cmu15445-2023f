@@ -18,38 +18,25 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
     AbstractExecutor(exec_ctx) ,plan_(plan){}
 
 void SeqScanExecutor::Init() {
-    auto table_info=exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
-    iter_=std::make_shared<TableIterator>(table_info->table_->MakeIterator());
-    //throw NotImplementedException("SeqScanExecutor is not implemented");
+    //通过plan_获取里面table_oid_t指向的那张表的TableHeap
+    tableInfo_=exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
+    tableHeap_=tableInfo_->table_.get();
+
+    //获得tableheap的迭代器
+    it_=std::make_unique<TableIterator>(tableHeap_->MakeEagerIterator());
 }
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-    if(iter_->IsEnd())   return false;
-    
-    Tuple tuple_tmp;
-    TupleMeta meta_tmp;
-
-    while(!iter_->IsEnd()){
-        auto pair_tmp=iter_->GetTuple();
-        ++(*iter_);
-        meta_tmp=pair_tmp.first;
-        if(meta_tmp.is_deleted_)    continue;
-        tuple_tmp=pair_tmp.second;
-
-        if(plan_->filter_predicate_){
-            auto value=plan_->filter_predicate_->Evaluate(&tuple_tmp,GetOutputSchema());
-            if(!value.IsNull()&&value.GetAs<bool>()){
-                *tuple=tuple_tmp;
-                *rid=tuple_tmp.GetRid();
-                return true;
-            }
-        }else{
-            *tuple=tuple_tmp;
-            *rid=tuple_tmp.GetRid();
+    while(!it_->IsEnd()){
+        auto [meta,newTuple]=it_->GetTuple();
+        if(!meta.is_deleted_){
+            *tuple=newTuple;
+            *rid=it_->GetRID();
+            ++(*it_);
             return true;
         }
+        ++(*it_);
     }
-    
     return false;
 }
 
