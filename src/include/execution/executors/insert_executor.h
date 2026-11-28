@@ -57,11 +57,13 @@ class InsertExecutor : public AbstractExecutor {
  private:
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
-  std::unique_ptr<AbstractExecutor> child_executor_;
+  std::unique_ptr<AbstractExecutor> child_executor_;//负责提供待插入数据的子算子
   
-  TableInfo* table_info_;
-  std::vector<IndexInfo*> index_infos_;
-  bool has_done_=false;
+  TransactionManager *txn_mgr_;
+  Transaction *txn_;
+  bool is_called_;//标志位，防止执行完又执行一次
+  TableInfo* tableInfo_;
+  TableHeap* tableHeap_;
 };
 
 }  // namespace bustub
